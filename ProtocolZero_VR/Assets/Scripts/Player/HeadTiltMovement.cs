@@ -12,6 +12,18 @@ public class HeadTiltMovement : MonoBehaviour
     [Tooltip("VR 카메라 (HMD). 비어있으면 자동으로 MainCamera 찾기")]
     public Transform vrCamera;
 
+    [Header("오토바이 모델 설정")]
+    [Tooltip("오토바이 모델 Transform. 헤드 기울기에 따라 함께 회전")]
+    public Transform motorcycleModel;
+
+    [Tooltip("오토바이 회전 부드러움 (낮을수록 더 부드럽게)")]
+    [Range(1f, 20f)]
+    public float motorcycleRotationSmoothness = 10f;
+
+    [Tooltip("오토바이 최대 회전 각도 (도)")]
+    [Range(10f, 45f)]
+    public float maxMotorcycleRotation = 30f;
+
     [Header("기울기 감지 설정")]
     [Tooltip("이동을 시작하는 최소 기울기 각도 (도)")]
     [Range(5f, 45f)]
@@ -83,7 +95,13 @@ public class HeadTiltMovement : MonoBehaviour
         // 4. 실제 이동 적용
         ApplyMovement(currentVelocity);
 
-        // 5. 디버그 정보
+        // 5. 오토바이 모델 회전 (머리 기울기와 동기화)
+        if (motorcycleModel != null)
+        {
+            ApplyMotorcycleRotation(tiltAngle);
+        }
+
+        // 6. 디버그 정보
         if (showDebugLogs && Mathf.Abs(tiltAngle) > minTiltAngle)
         {
             Debug.Log($"[HeadTiltMovement] Tilt: {tiltAngle:F1}° | Velocity: {currentVelocity:F2} m/s | Position: {transform.position.x:F2}");
@@ -156,6 +174,31 @@ public class HeadTiltMovement : MonoBehaviour
 
         // 위치 적용
         transform.position = newPosition;
+    }
+
+    /// <summary>
+    /// 오토바이 모델 회전 적용 (VR 헤드 기울기와 동기화)
+    /// </summary>
+    private void ApplyMotorcycleRotation(float tiltAngle)
+    {
+        // 기울기 각도를 오토바이 회전 각도로 변환
+        // tiltAngle 범위: -maxTiltAngle ~ +maxTiltAngle
+        // 목표 회전 각도: -maxMotorcycleRotation ~ +maxMotorcycleRotation
+        float normalizedTilt = Mathf.Clamp(tiltAngle / maxTiltAngle, -1f, 1f);
+        float targetRotationZ = -normalizedTilt * maxMotorcycleRotation;
+
+        // 현재 회전값 가져오기
+        Vector3 currentRotation = motorcycleModel.localRotation.eulerAngles;
+
+        // Z축 회전을 -180~180 범위로 변환
+        float currentZ = currentRotation.z;
+        if (currentZ > 180f) currentZ -= 360f;
+
+        // 부드러운 회전 적용
+        float smoothedZ = Mathf.Lerp(currentZ, targetRotationZ, Time.deltaTime * motorcycleRotationSmoothness);
+
+        // 새로운 회전 적용 (Z축만 변경, X와 Y는 유지)
+        motorcycleModel.localRotation = Quaternion.Euler(currentRotation.x, currentRotation.y, smoothedZ);
     }
 
     /// <summary>
